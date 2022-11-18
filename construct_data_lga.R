@@ -5,7 +5,7 @@ library(magrittr)
 
 acled_africa <- read_xlsx("Africa_1997-2022_Nov04.xlsx")
 
-acled_lga <- acled_africa %>% filter(COUNTRY %in% c("Mali", "Niger", "Burkina Faso"), YEAR > 2011) %>% 
+acled_lga <- acled_africa %>% filter(COUNTRY %in% c("Mali", "Niger", "Burkina Faso"), YEAR > 2014) %>% 
   select(EVENT_DATE, YEAR, EVENT_TYPE, SUB_EVENT_TYPE, ACTOR1, COUNTRY, ADMIN1, ADMIN2, FATALITIES, EVENT_DATE) %>% 
   mutate(Date = ymd(EVENT_DATE))
 
@@ -34,7 +34,12 @@ acled_lga_ <- acled_lga %>% mutate(FATALITIES_civil = ifelse(EVENT_TYPE == "Viol
                                             events_islamic = sum(ACTOR1_islamic),
                                             events_ethnic = sum(ACTOR1_ethnic),
                                             events_military = sum(ACTOR1_military),
-                                            .groups = "drop")  
+                                            .groups = "drop") %>% 
+  complete(COUNTRY, ADMIN1, ADMIN2, YEAR, Month)
+
+#Varianles around need to be calculate like fatal_rolling
+
+#exercise_label need to be replace by reference label
 
 #Harmonised framework
 cadre <- read_excel("cadre_harmonise_caf_ipc.xlsx", sheet = 1)
@@ -122,6 +127,42 @@ cadre_final %<>% mutate(adm1_name = ifelse(adm1_name == "Plateau Central", "Plat
                         adm2_name = ifelse(adm2_name == "Ville De Zinder", "Zinder", adm2_name),
                         adm2_name = ifelse(adm2_name == "Segou", "Ségou", adm2_name)
                         )
+cadre_final %<>% mutate(chTot = phase1 + phase2 + phase3 + phase4 + phase5, share_phase35 = (phase3 + phase4 + phase5)/chTot, pop_phase35 = (phase3 + phase4 + phase5) )
+
+inform_data <- read_excel("base_global_inform.xlsx")
+
+names(inform_data)
+
+inform_data_2021 <- inform_data %>% filter(Years %in% "2021") %>% select(`Admin 1`, PRV.UW.CHLD, MORT.RATE.U5)%>%
+ rename(Region = `Admin 1`)
+
+
+base_global_vhi <- read_excel("base_global_vhi.xlsx")
+names(base_vhi)
+vhi <- base_vhi %>% select(admin1Name_fr, Date, Moyen_VHI) %>% rename(Region = admin1Name_fr)
+
+vhi$Month <- format(as.Date(vhi$Date), "%m")
+
+vhi_month <- vhi %>% group_by(Region, Month)%>% 
+  summarise(vhi = mean(Moyen_VHI), .groups = "drop") %>% complete(Region, Month)
+
+vhi_monthly <- vhi_month %>% group_by(Month, Region) %>%
+  mutate(three_month_mean = (lag(vhi) + lag(vhi,2) + lag(vhi,3))/3) %>% ungroup() %>% 
+  complete(Month, Region)
+
+vhi_monthly %<>% mutate(Province = case_when(Region == "Boucle Du Mouhoun" ~ "Boucle du Mouhoun",
+                                             Region == "Centre-est" ~ "Centre-Est",
+                                             Region == "Centre-nord" ~ "Centre-Nord",
+                                             Region == "Centre-ouest" ~ "Centre-Ouest",
+                                             Region == "Centre-sud" ~ "Centre-Sud",
+                                             Region == "Hauts-bassins" ~ "Hauts-Bassins",
+                                             Region == "Segou" ~ "Ségou",
+                                             Region == "Plateau Central" ~ "Plateau-Central",
+                                             TRUE ~ Province))
+vhi_added <- vhi_monthly %>% filter(Region == "Gao") %>% mutate(Region="Menaka")
+vhi_monthly <- rbind(vhi_monthly, vhi_added)
+
+
 
 
 
